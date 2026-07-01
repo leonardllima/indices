@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Índices Econômicos — IGP-M &amp; IPCA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ===========================================================
+     TOKENS DE DESIGN
+     Paleta corporativa em tema claro: navy profundo para marca,
+     verde-petróleo para altas/ações primárias, terracota para
+     quedas, âmbar para avisos. Tipografia: IBM Plex Sans para
+     texto de interface e IBM Plex Mono para todos os números —
+     reforça a leitura de dados financeiros em colunas alinhadas.
+  =========================================================== */
+  :root{
+    --bg:#F3F5F8;
+    --surface:#FFFFFF;
+    --surface-muted:#F8F9FB;
+    --border:#E2E6ED;
+    --ink:#14202E;
+    --ink-muted:#5C6878;
+    --ink-faint:#8893A1;
+    --brand:#0B2545;
+    --brand-2:#173B66;
+    --accent:#0E7C66;
+    --accent-soft:#E3F3EE;
+    --negative:#B23A2E;
+    --negative-soft:#FBEAE8;
+    --warning:#8A5A00;
+    --warning-soft:#FFF1D6;
+    --radius-lg:14px;
+    --radius-md:10px;
+    --radius-sm:7px;
+    --shadow-card:0 1px 2px rgba(15,30,50,.04), 0 8px 24px -12px rgba(15,30,50,.12);
+    --font-ui:'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
+    --font-num:'IBM Plex Mono', 'Courier New', monospace;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .app{ max-width:1100px; margin:0 auto; padding:28px 20px 60px; }
+
+  /* ---------- Cabeçalho ---------- */
+  .topbar{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap:16px; flex-wrap:wrap; margin-bottom:22px;
+  }
+  .brand-block .eyebrow{
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-faint); font-weight:600;
+  }
+  .brand-block h1{
+    margin:4px 0 4px; font-size:26px; font-weight:700; color:var(--brand);
+    letter-spacing:-.01em;
+  }
+  .brand-block p{ margin:0; color:var(--ink-muted); font-size:14px; }
+
+  .topbar-actions{ display:flex; align-items:center; gap:12px; }
+  .last-sync-chip{
+    font-size:12px; color:var(--ink-muted); text-align:right; line-height:1.4;
+  }
+  .last-sync-chip strong{ color:var(--ink); font-family:var(--font-num); font-weight:500; }
+
+  .btn-atualizar{
+    font-family:var(--font-ui); font-size:14px; font-weight:600;
+    color:#fff; background:linear-gradient(180deg, var(--accent), #0B6353);
+    border:none; border-radius:var(--radius-md);
+    padding:11px 20px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px;
+    box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 6px 16px -8px rgba(14,124,102,.55);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn-atualizar:hover{ transform:translateY(-1px); }
+  .btn-atualizar:active{ transform:translateY(0); }
+  .btn-atualizar:focus-visible{ outline:2px solid var(--brand-2); outline-offset:2px; }
+  .btn-atualizar:disabled{ opacity:.7; cursor:wait; transform:none; }
+  .btn-atualizar .spinner{
+    width:13px; height:13px; border-radius:50%;
+    border:2px solid rgba(255,255,255,.4); border-top-color:#fff;
+    display:none; animation:girar .7s linear infinite;
+  }
+  .btn-atualizar.loading .spinner{ display:inline-block; }
+  @keyframes girar{ to{ transform:rotate(360deg); } }
+
+  /* ---------- Banners de erro/aviso ---------- */
+  .banner-area{ display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+  .banner{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:10px 14px; border-radius:var(--radius-sm); font-size:13.5px;
+    animation:entrar .18s ease;
+  }
+  @keyframes entrar{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+  .banner-erro{ background:var(--negative-soft); color:#7A2A21; border:1px solid #F2C9C4; }
+  .banner-aviso{ background:var(--warning-soft); color:var(--warning); border:1px solid #F0DBA8; }
+  .banner-close{
+    background:none; border:none; font-size:16px; line-height:1; cursor:pointer;
+    color:inherit; opacity:.6; padding:0 2px;
+  }
+  .banner-close:hover{ opacity:1; }
+
+  /* ---------- Cards dos índices ---------- */
+  .cards-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;
+  }
+  .card{
+    position:relative; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:20px 22px; box-shadow:var(--shadow-card);
+    overflow:hidden;
+  }
+  .card::before{
+    content:""; position:absolute; inset:0 0 auto 0; height:3px;
+    background:linear-gradient(90deg, var(--brand), var(--accent));
+  }
+  .card-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .card-tag{
+    font-family:var(--font-num); font-size:11px; font-weight:600;
+    letter-spacing:.06em; color:var(--brand); background:var(--accent-soft);
+    padding:3px 8px; border-radius:5px; display:inline-block;
+  }
+  .card-title{ margin:8px 0 0; font-size:14.5px; font-weight:600; color:var(--ink); }
+
+  .badge-novo{
+    font-size:10.5px; font-weight:700; letter-spacing:.06em; color:#fff;
+    background:var(--accent); padding:3px 8px; border-radius:20px;
+    animation:pulso 2.2s ease-in-out infinite;
+  }
+  @keyframes pulso{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
+
+  .card-main{ margin:18px 0 6px; }
+  .metric{ display:flex; align-items:baseline; gap:8px; }
+  .metric-value{ font-family:var(--font-num); font-size:38px; font-weight:600; color:var(--ink); }
+  .metric-value.pos{ color:var(--accent); }
+  .metric-value.neg{ color:var(--negative); }
+  .metric-arrow{ font-size:18px; }
+  .metric-arrow.pos{ color:var(--accent); }
+  .metric-arrow.neg{ color:var(--negative); }
+  .metric-label{ display:block; font-size:12.5px; color:var(--ink-muted); margin-top:2px; }
+
+  .card-sub{
+    display:flex; gap:22px; margin:16px 0 16px; padding-top:14px;
+    border-top:1px dashed var(--border);
+  }
+  .submetric-value{ display:block; font-family:var(--font-num); font-size:16.5px; font-weight:600; color:var(--ink); }
+  .submetric-label{ display:block; font-size:11.5px; color:var(--ink-muted); margin-top:2px; }
+
+  .card-foot{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .source-pill{
+    font-size:11.5px; color:var(--brand-2); background:var(--surface-muted);
+    border:1px solid var(--border); padding:4px 9px; border-radius:20px; font-weight:500;
+  }
+  .card-status{ font-size:11.5px; color:var(--ink-faint); }
+  .card-status.status-erro{ color:var(--negative); }
+
+  /* ---------- Barra de status global ---------- */
+  .status-bar{
+    display:flex; gap:24px; flex-wrap:wrap; align-items:center;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:13px 18px; margin-bottom:26px; font-size:13px; color:var(--ink-muted);
+  }
+  .status-item{ display:flex; align-items:center; gap:8px; }
+  .status-item strong{ color:var(--ink); font-family:var(--font-num); font-weight:500; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--ink-faint); flex:none; }
+  .dot-carregando{ background:#C9A227; animation:pulso 1.1s ease-in-out infinite; }
+  .dot-sucesso{ background:var(--accent); }
+  .dot-erro{ background:var(--negative); }
+  .dot-info{ background:var(--brand-2); }
+
+  /* ---------- Tabela histórica ---------- */
+  .table-section h2{ font-size:16px; font-weight:700; color:var(--brand); margin:0 0 12px; }
+  .table-wrap{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    overflow:auto; max-height:520px; box-shadow:var(--shadow-card);
+  }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; min-width:560px; }
+  thead th{
+    position:sticky; top:0; background:var(--brand); color:#fff;
+    text-align:left; font-weight:600; font-size:12px; letter-spacing:.02em;
+    padding:11px 16px; white-space:nowrap; z-index:1;
+  }
+  thead th:not(:first-child){ text-align:right; }
+  tbody td{ padding:9px 16px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  tbody tr:hover{ background:var(--surface-muted); }
+  tbody td:first-child{ font-family:var(--font-num); font-weight:500; color:var(--ink); }
+  td.num{ text-align:right; font-family:var(--font-num); color:var(--ink-muted); }
+
+  /* Célula numérica com barra de intensidade — elemento de assinatura do painel */
+  .cellnum{ display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+  .cellnum .val{ font-family:var(--font-num); font-weight:500; }
+  .cellnum .val.pos{ color:var(--accent); }
+  .cellnum .val.neg{ color:var(--negative); }
+  .bar-track{ width:64px; height:4px; background:var(--surface-muted); border-radius:3px; overflow:hidden; }
+  .bar{ height:100%; border-radius:3px; }
+  .bar.pos{ background:var(--accent); }
+  .bar.neg{ background:var(--negative); }
+
+  /* ---------- Documentação ---------- */
+  .docs{ margin-top:30px; }
+  .docs details{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:6px 22px; box-shadow:var(--shadow-card);
+  }
+  .docs summary{
+    cursor:pointer; font-weight:700; color:var(--brand); padding:14px 0; font-size:14.5px;
+    list-style:none;
+  }
+  .docs summary::-webkit-details-marker{ display:none; }
+  .docs summary::before{ content:"▸ "; color:var(--accent); }
+  .docs[open] summary::before{ content:"▾ "; }
+  .docs h3{ font-size:13.5px; color:var(--brand-2); margin:18px 0 6px; }
+  .docs p, .docs li{ font-size:13px; color:var(--ink-muted); line-height:1.6; }
+  .docs code{
+    font-family:var(--font-num); background:var(--surface-muted); padding:1px 6px;
+    border-radius:5px; font-size:12px; color:var(--brand-2); word-break:break-all;
+  }
+  .docs ol, .docs ul{ padding-left:20px; margin:6px 0 16px; }
+
+  footer{ text-align:center; color:var(--ink-faint); font-size:11.5px; margin-top:30px; }
+
+  /* ---------- Responsivo ---------- */
+  @media (max-width:760px){
+    .cards-grid{ grid-template-columns:1fr; }
+    .metric-value{ font-size:32px; }
+    .topbar{ flex-direction:column; align-items:flex-start; }
+    .topbar-actions{ width:100%; justify-content:space-between; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation:none !important; transition:none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand-block">
+      <span class="eyebrow">Painel Corporativo · Indicadores Econômicos</span>
+      <h1>IGP-M &amp; IPCA</h1>
+      <p>Consulta automática às fontes oficiais — sem dados fixos, sem scraping.</p>
+    </div>
+    <div class="topbar-actions">
+      <div class="last-sync-chip">
+        Última sincronização<br><strong id="ultimaSync">—</strong>
+      </div>
+      <button class="btn-atualizar" id="btnAtualizar" type="button">
+        <span class="spinner" aria-hidden="true"></span>
+        Atualizar Índices
+      </button>
+    </div>
+  </header>
+
+  <div class="banner-area" id="bannerArea" role="status" aria-live="polite"></div>
+
+  <section class="cards-grid">
+    <article class="card" id="card-igpm">
+      <div class="card-head">
+        <div>
+          <span class="card-tag">IGP-M</span>
+          <h3 class="card-title">Índice Geral de Preços — Mercado</h3>
+        </div>
+        <span class="badge-novo" data-badge="igpm" hidden>NOVO</span>
+      </div>
+      <div class="card-main">
+        <div class="metric">
+          <span class="metric-value" id="igpm-mensal">—</span>
+          <span class="metric-arrow" id="igpm-seta"></span>
+        </div>
+        <span class="metric-label">Variação mensal</span>
+      </div>
+      <div class="card-sub">
+        <div>
+          <span class="submetric-value" id="igpm-acumulado">—</span>
+          <span class="submetric-label">Acumulado 12 meses</span>
+        </div>
+        <div>
+          <span class="submetric-value" id="igpm-referencia">—</span>
+          <span class="submetric-label">Competência de referência</span>
+        </div>
+      </div>
+      <div class="card-foot">
+        <span class="source-pill">Fonte: IPEA Data</span>
+        <span class="card-status" id="igpm-status">Carregando…</span>
+      </div>
+    </article>
+
+    <article class="card" id="card-ipca">
+      <div class="card-head">
+        <div>
+          <span class="card-tag">IPCA</span>
+          <h3 class="card-title">Índice Nacional de Preços ao Consumidor Amplo</h3>
+        </div>
+        <span class="badge-novo" data-badge="ipca" hidden>NOVO</span>
+      </div>
+      <div class="card-main">
+        <div class="metric">
+          <span class="metric-value" id="ipca-mensal">—</span>
+          <span class="metric-arrow" id="ipca-seta"></span>
+        </div>
+        <span class="metric-label">Variação mensal</span>
+      </div>
+      <div class="card-sub">
+        <div>
+          <span class="submetric-value" id="ipca-acumulado">—</span>
+          <span class="submetric-label">Acumulado 12 meses</span>
+        </div>
+        <div>
+          <span class="submetric-value" id="ipca-referencia">—</span>
+          <span class="submetric-label">Competência de referência</span>
+        </div>
+      </div>
+      <div class="card-foot">
+        <span class="source-pill">Fonte: IBGE/SIDRA</span>
+        <span class="card-status" id="ipca-status">Carregando…</span>
+      </div>
+    </article>
+  </section>
+
+  <section class="status-bar" id="statusBar">
+    <div class="status-item"><span class="dot dot-carregando" id="statusDot"></span><span id="statusTexto">Carregando dados...</span></div>
+    <div class="status-item">Fonte IGP-M: <strong>IPEA Data</strong></div>
+    <div class="status-item">Fonte IPCA: <strong>IBGE/SIDRA</strong></div>
+  
+</section>
+
+  <section class="table-section" style="margin-bottom:24px;">
+    <h2>Próximas Atualizações dos Índices</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Mês de Referência</th>
+            <th>IGP-M (FGV)</th>
+            <th>IPCA (IBGE)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Jun/2026</td><td class="num">29/06/2026</td><td class="num">10/07/2026</td></tr>
+          <tr><td>Jul/2026</td><td class="num">30/07/2026</td><td class="num">11/08/2026</td></tr>
+          <tr><td>Ago/2026</td><td class="num">28/08/2026</td><td class="num">11/09/2026</td></tr>
+          <tr><td>Set/2026</td><td class="num">29/09/2026</td><td class="num">09/10/2026</td></tr>
+          <tr><td>Out/2026</td><td class="num">29/10/2026</td><td class="num">12/11/2026</td></tr>
+          <tr><td>Nov/2026</td><td class="num">27/11/2026</td><td class="num">10/12/2026</td></tr>
+          <tr><td>Dez/2026</td><td class="num">29/12/2026</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+</section>
+
+  <section class="table-section">
+    <h2>Histórico — Últimos 12 meses</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Mês/Ano</th>
+            <th scope="col">IGP-M Mensal</th>
+            <th scope="col">IGP-M Acum. 12m</th>
+            <th scope="col">IPCA Mensal</th>
+            <th scope="col">IPCA Acum. 12m</th>
+          </tr>
+        </thead>
+        <tbody id="tabelaCorpo">
+          <tr><td colspan="5" style="text-align:center; color:var(--ink-faint); padding:24px;">Carregando série histórica…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="docs">
+    <details>
+      <summary>Documentação técnica do sistema</summary>
+
+      <h3>1. APIs utilizadas</h3>
+      <ul>
+        <li><strong>IBGE/SIDRA</strong> — Sistema IBGE de Recuperação Automática, fonte oficial do IPCA.</li>
+        <li><strong>IPEA Data</strong> — base de séries macroeconômicas do Instituto de Pesquisa Econômica Aplicada, fonte oficial do IGP-M.</li>
+      </ul>
+
+      <h3>2. Endpoints consumidos</h3>
+      <ul>
+        <li>IPCA (tabela 1737, variável 63 — variação mensal): <code>https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/63/p/last%2026/d/v63%202</code></li>
+        <li>IGP-M (série IGP12_IGPMG12 — variação mensal): <code>https://www.ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='IGP12_IGPMG12')</code>, com retentativa automática no endpoint oficial em HTTP caso o HTTPS não responda.</li>
+      </ul>
+      <p><strong>Atenção:</strong> a API do IPEA Data é publicada oficialmente apenas em HTTP. Páginas servidas em HTTPS (como esta, quando hospedada via HTTPS) podem ter essa chamada bloqueada pela política de "mixed content" do navegador. Quando isso ocorrer, o painel exibirá a mensagem "API indisponível" para o IGP-M sem interromper a exibição do IPCA. Em produção, recomenda-se um proxy HTTPS próprio para esse endpoint.</p>
+
+      <h3>3. Estrutura dos dados retornados</h3>
+      <p>O SIDRA retorna um array em que o primeiro elemento é um cabeçalho descritivo (ignorado pelo sistema) e os demais contêm os campos <code>D3C</code> (competência no formato AAAAMM), <code>D3N</code> (nome do período) e <code>V</code> (valor da variação mensal, em texto). O IPEA Data retorna um objeto OData com a propriedade <code>value</code>, um array de registros contendo <code>VALDATA</code> (data ISO do mês de referência) e <code>VALVALOR</code> (valor numérico da variação mensal).</p>
+
+      <h3>4. Processo de cálculo do acumulado de 12 meses</h3>
+      <p>Os valores acumulados fornecidos pelas APIs não são utilizados. O sistema calcula o acumulado de 12 meses compondo as 12 variações mensais mais recentes de cada índice através da fórmula <code>((1+m1/100)×(1+m2/100)×...×(1+m12/100) − 1) × 100</code>, implementada na função <code>calcularAcumulado12Meses()</code>. Caso não existam 12 meses consecutivos válidos para uma competência, o acumulado é exibido como indisponível.</p>
+
+      <h3>5. Fluxo de atualização do sistema</h3>
+      <p>Ao carregar a página e ao clicar em "Atualizar Índices", a função <code>atualizarIndices()</code> dispara as buscas de IPCA e IGP-M em paralelo, via <code>Promise.allSettled</code>, para que a falha de uma fonte não impeça a renderização da outra. Os dados retornados passam por <code>validarDados()</code> e <code>removerDuplicados()</code>, são combinados em <code>processarSeriesHistoricas()</code> e, por fim, exibidos pelas funções <code>atualizarCards()</code> e <code>atualizarTabela()</code>. A última competência exibida de cada índice é salva em <code>localStorage</code> para destacar, na próxima visita, quando um novo mês for divulgado.</p>
+
+      <h3>6. Estratégia de tratamento de erros</h3>
+      <p>Toda chamada de rede passa por um wrapper com <code>AbortController</code> e tempo limite, evitando que uma API lenta trave o painel. Falhas são capturadas em blocos try/catch, registradas no console com a função <code>exibirErro()</code> e comunicadas ao usuário por avisos não-bloqueantes na interface — os dados já carregados de outra fonte permanecem visíveis. Lacunas detectadas na série histórica geram um aviso específico, sem interromper a exibição dos meses válidos.</p>
+
+      <h3>7. Como adaptar o sistema para novos índices econômicos</h3>
+      <p>Para incluir um novo índice (por exemplo, INPC ou SELIC): crie uma função <code>buscarNomeDoIndice()</code> que retorne um array no formato <code>{ competencia: 'AAAAMM', valor: number }</code> a partir da API oficial da nova fonte; inclua-a no <code>Promise.allSettled</code> da função <code>atualizarIndices()</code>; estenda <code>processarSeriesHistoricas()</code> para mapear a nova série e calcular seu acumulado de 12 meses; adicione o card correspondente no HTML e as colunas na tabela. Como a validação, a remoção de duplicados e o cálculo de acumulado já são genéricos, nenhuma outra função precisa ser alterada.</p>
+    </details>
+  </section>
+
+  <footer>Dados oficiais — IBGE/SIDRA (IPCA) e IPEA Data (IGP-M). Sem valores fixos no código; toda consulta é feita em tempo real.</footer>
+</div>
+
+<script>
+/* =================================================================
+   CONFIGURAÇÃO E CONSTANTES
+   Nenhum valor de índice é fixado aqui — apenas endereços de API
+   e parâmetros de consulta.
+================================================================= */
+
+// IPCA: tabela 1737 do SIDRA/IBGE, variável 63 = variação mensal (%),
+// últimos 26 períodos (margem suficiente para calcular o acumulado
+// de 12 meses de todas as 12 linhas exibidas na tabela histórica).
+const SIDRA_URL = "https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/63/p/last%2026/d/v63%202";
+
+// IGP-M: série oficial do IPEA Data (variação mensal, %).
+const IPEA_SERIE = "IGP12_IGPMG12";
+const IPEA_URL_HTTPS = "https://www.ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='" + IPEA_SERIE + "')";
+const IPEA_URL_HTTP  = "http://www.ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='" + IPEA_SERIE + "')";
+
+const TIMEOUT_MS = 15000;     // tempo limite por requisição
+const MESES_HISTORICO = 12;   // linhas exibidas na tabela
+
+/* =================================================================
+   FUNÇÕES UTILITÁRIAS DE FORMATAÇÃO
+================================================================= */
+
+/** Formata um número como percentual com vírgula decimal (ex.: 0,85%). */
+function formatarPercentual(valor) {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) return "—";
+  return valor.toFixed(2).replace(".", ",") + "%";
+}
+
+/** Converte uma competência 'AAAAMM' para o formato de exibição MM/AAAA. */
+function formatarCompetencia(competencia) {
+  if (!competencia || competencia.length !== 6) return "—";
+  return competencia.slice(4, 6) + "/" + competencia.slice(0, 4);
+}
+
+/** Formata um objeto Date no padrão DD/MM/AAAA HH:mm. */
+function formatarDataHora(data) {
+  const dia = String(data.getDate()).padStart(2, "0");
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const ano = data.getFullYear();
+  const hora = String(data.getHours()).padStart(2, "0");
+  const min = String(data.getMinutes()).padStart(2, "0");
+  return dia + "/" + mes + "/" + ano + " " + hora + ":" + min;
+}
+
+/** Executa um fetch com tempo limite via AbortController, cancelando requisições lentas. */
+async function fetchComTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || TIMEOUT_MS);
+  try {
+    const resposta = await fetch(url, { signal: controller.signal, mode: "cors" });
+    if (!resposta.ok) throw new Error("HTTP " + resposta.status);
+    return await resposta.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* =================================================================
+   BUSCA DE DADOS NAS APIS OFICIAIS
+================================================================= */
+
+/**
+ * Busca a série histórica do IPCA (variação mensal) na API oficial
+ * do IBGE/SIDRA. Retorna um array de objetos { competencia, valor }.
+ * Lança erro em caso de falha de conexão ou resposta vazia.
+ */
+async function buscarIPCA() {
+  const dados = await fetchComTimeout(SIDRA_URL);
+  if (!Array.isArray(dados) || dados.length < 2) {
+    throw new Error("Dados não encontrados na API do IBGE/SIDRA.");
+  }
+  // O primeiro elemento do retorno do SIDRA é o cabeçalho de colunas e deve ser descartado.
+  return dados.slice(1).map((linha) => ({
+    competencia: linha.D3C,
+    valor: Number(String(linha.V).replace(",", ".")),
+  }));
+}
+
+/**
+ * Busca a série histórica do IGP-M (variação mensal) na API oficial
+ * do IPEA Data, via protocolo OData. Tenta primeiro o endpoint HTTPS
+ * e recorre ao HTTP oficial em caso de falha. Retorna um array de
+ * objetos { competencia, valor }.
+ */
+async function buscarIGPM() {
+  let resposta;
+  try {
+    resposta = await fetchComTimeout(IPEA_URL_HTTPS);
+  } catch (erroHttps) {
+    console.error("Falha ao consultar o IGP-M via HTTPS, tentando endpoint HTTP oficial do IPEA:", erroHttps);
+    resposta = await fetchComTimeout(IPEA_URL_HTTP);
+  }
+
+  const valores = resposta && resposta.value;
+  if (!Array.isArray(valores) || valores.length === 0) {
+    throw new Error("Dados do IGP-M não encontrados na API do IPEA Data.");
+  }
+
+  return valores
+    .filter((item) => item && item.VALDATA)
+    .sort((a, b) => new Date(a.VALDATA) - new Date(b.VALDATA))
+    .slice(-26) // mantém apenas o período recente necessário ao cálculo do acumulado
+    .map((item) => {
+      const data = new Date(item.VALDATA);
+      const ano = data.getUTCFullYear();
+      const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
+      return { competencia: "" + ano + mes, valor: Number(item.VALVALOR) };
+    });
+}
+
+/* =================================================================
+   VALIDAÇÃO E LIMPEZA DOS DADOS
+================================================================= */
+
+/**
+ * Valida um registro { competencia, valor }: a competência deve
+ * seguir o formato AAAAMM e o valor deve ser um número finito dentro
+ * de uma faixa plausível para variação mensal de índice de preços.
+ */
+function validarDados(registro) {
+  if (!registro || typeof registro.competencia !== "string") return false;
+  if (!/^\d{6}$/.test(registro.competencia)) return false;
+  const valor = registro.valor;
+  if (typeof valor !== "number" || !Number.isFinite(valor)) return false;
+  if (valor < -50 || valor > 50) return false;
+  return true;
+}
+
+/**
+ * Remove registros duplicados de uma série (mesma competência),
+ * preservando a primeira ocorrência encontrada.
+ */
+function removerDuplicados(lista) {
+  const vistos = new Set();
+  const resultado = [];
+  for (const registro of lista) {
+    if (!vistos.has(registro.competencia)) {
+      vistos.add(registro.competencia);
+      resultado.push(registro);
+    }
+  }
+  return resultado;
+}
+
+/* =================================================================
+   CÁLCULO DO ACUMULADO DE 12 MESES
+================================================================= */
+
+/**
+ * Calcula o percentual acumulado de 12 meses a partir de uma lista
+ * de variações mensais (%), pela fórmula composta:
+ * ((1+m1/100)×(1+m2/100)×...×(1+m12/100) − 1) × 100.
+ * Retorna null se não houver exatamente 12 valores válidos.
+ */
+function calcularAcumulado12Meses(valoresMensais) {
+  if (!Array.isArray(valoresMensais) || valoresMensais.length !== 12) return null;
+  if (valoresMensais.some((v) => typeof v !== "number" || !Number.isFinite(v))) return null;
+  const fator = valoresMensais.reduce((acumulador, m) => acumulador * (1 + m / 100), 1);
+  return (fator - 1) * 100;
+}
+
+/* =================================================================
+   PROCESSAMENTO DAS SÉRIES HISTÓRICAS
+================================================================= */
+
+/**
+ * Combina as séries validadas de IPCA e IGP-M, calcula o acumulado de
+ * 12 meses mês a mês para cada índice, monta as linhas dos últimos 12
+ * meses disponíveis e identifica lacunas na sequência cronológica.
+ * Retorna { linhas, lacunas, resumoIGPM, resumoIPCA }.
+ */
+function processarSeriesHistoricas(serieIPCA, serieIGPM) {
+  const mapaIPCA = new Map(serieIPCA.map((r) => [r.competencia, r.valor]));
+  const mapaIGPM = new Map(serieIGPM.map((r) => [r.competencia, r.valor]));
+
+  // Retorna a competência (AAAAMM) imediatamente anterior à informada.
+  function competenciaAnterior(competencia) {
+    const ano = parseInt(competencia.slice(0, 4), 10);
+    const mes = parseInt(competencia.slice(4, 6), 10);
+    const dataAnterior = new Date(ano, mes - 2, 1);
+    return "" + dataAnterior.getFullYear() + String(dataAnterior.getMonth() + 1).padStart(2, "0");
+  }
+
+  // Calcula o acumulado de 12 meses terminando em 'competencia', usando o mapa informado.
+  function acumuladoEm(mapa, competencia) {
+    let atual = competencia;
+    const valores = [];
+    for (let i = 0; i < 12; i++) {
+      if (!mapa.has(atual)) return null;
+      valores.push(mapa.get(atual));
+      atual = competenciaAnterior(atual);
+    }
+    return calcularAcumulado12Meses(valores);
+  }
+
+  // União cronológica de todas as competências disponíveis nas duas séries.
+  const todasCompetencias = Array.from(new Set([...mapaIPCA.keys(), ...mapaIGPM.keys()])).sort();
+
+  const linhasCompletas = todasCompetencias
+    .map((competencia) => ({
+      competencia,
+      igpmMensal: mapaIGPM.has(competencia) ? mapaIGPM.get(competencia) : null,
+      igpmAcumulado: acumuladoEm(mapaIGPM, competencia),
+      ipcaMensal: mapaIPCA.has(competencia) ? mapaIPCA.get(competencia) : null,
+      ipcaAcumulado: acumuladoEm(mapaIPCA, competencia),
+    }))
+    // Regra de negócio: exibir apenas meses com ao menos um dado válido.
+    .filter((linha) => linha.igpmMensal !== null || linha.ipcaMensal !== null);
+
+  const linhas = linhasCompletas.slice(-MESES_HISTORICO);
+
+  // Competência mais recente disponível em cada índice. IGP-M e IPCA são
+  // divulgados em datas diferentes do mês, então é normal o mês mais recente
+  // ter apenas um dos dois índices — isso NÃO caracteriza lacuna.
+  const ultimaIGPM = mapaIGPM.size ? Array.from(mapaIGPM.keys()).sort().pop() : null;
+  const ultimaIPCA = mapaIPCA.size ? Array.from(mapaIPCA.keys()).sort().pop() : null;
+
+  // Sinaliza lacuna apenas em situações reais:
+  //  (a) salto na sequência cronológica — um mês completamente ausente; ou
+  //  (b) mês INTERNO sem um dos índices, quando esse índice já possui dado de
+  //      um mês POSTERIOR (ou seja, a fonte pulou um mês no meio da série).
+  // Ausências restritas ao mês mais recente de um índice são ignoradas.
+  let lacunas = false;
+  for (let i = 1; i < linhas.length; i++) {
+    if (competenciaAnterior(linhas[i].competencia) !== linhas[i - 1].competencia) {
+      lacunas = true;
+      break;
+    }
+  }
+  if (!lacunas) {
+    lacunas = linhas.some((l) =>
+      (l.igpmMensal === null && ultimaIGPM !== null && l.competencia < ultimaIGPM) ||
+      (l.ipcaMensal === null && ultimaIPCA !== null && l.competencia < ultimaIPCA)
+    );
+  }
+
+  // Resumo do mês mais recentemente divulgado para cada índice, de forma independente
+  // (IGP-M e IPCA costumam ser divulgados em datas diferentes do mês).
+  function resumoDoMapa(mapa) {
+    if (mapa.size === 0) return null;
+    const competenciaMaisRecente = Array.from(mapa.keys()).sort().pop();
+    return {
+      competencia: competenciaMaisRecente,
+      mensal: mapa.get(competenciaMaisRecente),
+      acumulado: acumuladoEm(mapa, competenciaMaisRecente),
+    };
+  }
+
+  return {
+    linhas,
+    lacunas,
+    resumoIGPM: resumoDoMapa(mapaIGPM),
+    resumoIPCA: resumoDoMapa(mapaIPCA),
+  };
+}
+
+/* =================================================================
+   RENDERIZAÇÃO NA INTERFACE
+================================================================= */
+
+/**
+ * Atualiza os cards de IGP-M e IPCA com a variação mensal, o acumulado
+ * de 12 meses e a competência de referência mais recentes, aplicando a
+ * formatação adequada e destacando uma nova competência identificada
+ * desde a última visita (comparação via localStorage).
+ */
+function atualizarCards(dados) {
+  ["igpm", "ipca"].forEach((indice) => {
+    const info = dados[indice];
+    const elMensal = document.getElementById(indice + "-mensal");
+    const elAcumulado = document.getElementById(indice + "-acumulado");
+    const elReferencia = document.getElementById(indice + "-referencia");
+    const elSeta = document.getElementById(indice + "-seta");
+    const elStatus = document.getElementById(indice + "-status");
+    const elBadge = document.querySelector('[data-badge="' + indice + '"]');
+
+    if (!info || info.erro) {
+      elStatus.textContent = (info && info.erro) || "Dados não encontrados.";
+      elStatus.classList.add("status-erro");
+      return; // Mantém os últimos valores válidos exibidos — não interrompe a renderização.
+    }
+
+    elStatus.textContent = "Atualizado";
+    elStatus.classList.remove("status-erro");
+    elMensal.textContent = formatarPercentual(info.mensal);
+    elMensal.className = "metric-value " + (info.mensal >= 0 ? "pos" : "neg");
+    elSeta.textContent = info.mensal >= 0 ? "▲" : "▼";
+    elSeta.className = "metric-arrow " + (info.mensal >= 0 ? "pos" : "neg");
+    elAcumulado.textContent = formatarPercentual(info.acumulado);
+    elReferencia.textContent = formatarCompetencia(info.competencia);
+
+    // Compara com a última competência salva para destacar uma nova divulgação.
+    const chaveLocal = "ultimaCompetencia_" + indice;
+    const competenciaSalva = localStorage.getItem(chaveLocal);
+    elBadge.hidden = !(competenciaSalva && competenciaSalva !== info.competencia);
+    localStorage.setItem(chaveLocal, info.competencia);
+  });
+}
+
+/** Monta o conteúdo de uma célula numérica com barra de intensidade visual. */
+function celulaComBarra(valor, maxAbs) {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) {
+    return '<div class="cellnum"><span class="val">—</span></div>';
+  }
+  const largura = Math.min(100, (Math.abs(valor) / maxAbs) * 100);
+  const classe = valor >= 0 ? "pos" : "neg";
+  return (
+    '<div class="cellnum">' +
+      '<span class="val ' + classe + '">' + formatarPercentual(valor) + "</span>" +
+      '<div class="bar-track"><div class="bar ' + classe + '" style="width:' + largura.toFixed(0) + '%"></div></div>' +
+    "</div>"
+  );
+}
+
+/**
+ * Renderiza a tabela histórica com os últimos 12 meses disponíveis,
+ * do mês mais recente para o mais antigo, incluindo a barra de
+ * intensidade visual ao lado de cada variação mensal.
+ */
+function atualizarTabela(linhas) {
+  const corpo = document.getElementById("tabelaCorpo");
+  if (!linhas || linhas.length === 0) {
+    corpo.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--ink-faint); padding:24px;">Nenhum dado válido disponível.</td></tr>';
+    return;
+  }
+
+  const maxAbsIGPM = Math.max(1, ...linhas.map((l) => Math.abs(l.igpmMensal || 0)));
+  const maxAbsIPCA = Math.max(1, ...linhas.map((l) => Math.abs(l.ipcaMensal || 0)));
+
+  corpo.innerHTML = linhas
+    .slice()
+    .reverse()
+    .map((linha) => (
+      "<tr>" +
+        "<td>" + formatarCompetencia(linha.competencia) + "</td>" +
+        "<td>" + celulaComBarra(linha.igpmMensal, maxAbsIGPM) + "</td>" +
+        '<td class="num">' + formatarPercentual(linha.igpmAcumulado) + "</td>" +
+        "<td>" + celulaComBarra(linha.ipcaMensal, maxAbsIPCA) + "</td>" +
+        '<td class="num">' + formatarPercentual(linha.ipcaAcumulado) + "</td>" +
+      "</tr>"
+    ))
+    .join("");
+}
+
+/**
+ * Atualiza a barra de status global (mensagem + indicador colorido).
+ * Quando a atualização é concluída com sucesso, registra também o
+ * horário da última sincronização bem-sucedida.
+ */
+function atualizarStatus(mensagem, tipo) {
+  document.getElementById("statusTexto").textContent = mensagem;
+  document.getElementById("statusDot").className = "dot dot-" + (tipo || "info");
+  if (tipo === "sucesso") {
+    document.getElementById("ultimaSync").textContent = formatarDataHora(new Date());
+  }
+}
+
+/** Registra um erro no console e exibe um aviso amigável e não-bloqueante na interface. */
+function exibirErro(mensagem, origem) {
+  console.error("[" + (origem || "Sistema") + "]", mensagem);
+  adicionarBanner(mensagem, "banner-erro");
+}
+
+/** Exibe um aviso (não-erro) na interface, como a sinalização de lacunas na série. */
+function exibirAviso(mensagem) {
+  console.warn(mensagem);
+  adicionarBanner(mensagem, "banner-aviso");
+}
+
+function adicionarBanner(mensagem, classe) {
+  const area = document.getElementById("bannerArea");
+  const banner = document.createElement("div");
+  banner.className = "banner " + classe;
+  banner.innerHTML = "<span>" + mensagem + '</span><button class="banner-close" aria-label="Fechar aviso">×</button>';
+  banner.querySelector(".banner-close").addEventListener("click", () => banner.remove());
+  area.appendChild(banner);
+}
+
+/**
+ * Verifica o ambiente de execução. Quando a página é aberta diretamente do
+ * disco (protocolo file://), o navegador a trata como origem opaca e bloqueia,
+ * por segurança, as consultas de origem cruzada às APIs do IBGE/SIDRA e do
+ * IPEA Data. Nesse caso, exibe um aviso explicativo com a solução recomendada.
+ */
+function verificarAmbiente() {
+  if (location.protocol === "file:") {
+    adicionarBanner(
+      "Esta página foi aberta diretamente do disco (<code>file://</code>). Por segurança, " +
+      "o navegador bloqueia as consultas às APIs do IBGE/SIDRA e do IPEA Data nesse modo, " +
+      "e os índices podem não carregar. Para funcionar corretamente, sirva o arquivo via " +
+      "HTTP — por exemplo, hospedando no GitHub Pages, ou rodando " +
+      "<code>python -m http.server</code> na pasta do arquivo e acessando " +
+      "<code>http://localhost:8000/</code> no navegador.",
+      "banner-aviso"
+    );
+  }
+}
+
+/* =================================================================
+   ORQUESTRAÇÃO PRINCIPAL
+================================================================= */
+
+/**
+ * Função principal: dispara a busca de IPCA e IGP-M em paralelo,
+ * trata cada fonte de forma independente (uma falha não impede a
+ * exibição dos dados já disponíveis da outra), processa as séries e
+ * atualiza toda a interface.
+ */
+async function atualizarIndices() {
+  const botao = document.getElementById("btnAtualizar");
+  botao.disabled = true;
+  botao.classList.add("loading");
+  document.getElementById("bannerArea").innerHTML = "";
+  verificarAmbiente();
+  atualizarStatus("Carregando dados...", "carregando");
+
+  const [resultadoIPCA, resultadoIGPM] = await Promise.allSettled([buscarIPCA(), buscarIGPM()]);
+
+  let serieIPCA = [];
+  let serieIGPM = [];
+  let erroIPCA = null;
+  let erroIGPM = null;
+
+  try {
+    if (resultadoIPCA.status === "fulfilled") {
+      serieIPCA = removerDuplicados(resultadoIPCA.value.filter(validarDados));
+    } else {
+      erroIPCA = "Falha ao obter dados do IPCA. API do IBGE/SIDRA indisponível ou fora do ar.";
+      exibirErro(erroIPCA, "IBGE/SIDRA");
+    }
+
+    if (resultadoIGPM.status === "fulfilled") {
+      serieIGPM = removerDuplicados(resultadoIGPM.value.filter(validarDados));
+    } else {
+      erroIGPM = "Falha ao obter dados do IGP-M. API do IPEA Data indisponível.";
+      exibirErro(erroIGPM, "IPEA Data");
+    }
+
+    if (serieIPCA.length === 0 && serieIGPM.length === 0) {
+      atualizarStatus("Falha de conexão: nenhum dado pôde ser carregado.", "erro");
+      return;
+    }
+
+    const { linhas, lacunas, resumoIGPM, resumoIPCA } = processarSeriesHistoricas(serieIPCA, serieIGPM);
+
+    if (lacunas) {
+      exibirAviso("Foram identificadas lacunas na série histórica: alguns meses podem estar ausentes ou incompletos.");
+    }
+
+    atualizarCards({
+      igpm: resumoIGPM || { erro: erroIGPM || "Dados não encontrados." },
+      ipca: resumoIPCA || { erro: erroIPCA || "Dados não encontrados." },
+    });
+    atualizarTabela(linhas);
+
+    atualizarStatus(
+      erroIPCA || erroIGPM ? "Atualização concluída com avisos — verifique as mensagens acima." : "Atualização concluída com sucesso.",
+      "sucesso"
+    );
+  } catch (erroProcessamento) {
+    console.error("Erro de processamento dos dados:", erroProcessamento);
+    exibirErro("Erro de processamento dos dados. Tente atualizar novamente.", "Processamento");
+    atualizarStatus("Erro de processamento dos dados.", "erro");
+  } finally {
+    botao.disabled = false;
+    botao.classList.remove("loading");
+  }
+}
+
+document.getElementById("btnAtualizar").addEventListener("click", atualizarIndices);
+
+// Atualização automática ao abrir a página.
+atualizarIndices();
+</script>
+</body>
+</html>
