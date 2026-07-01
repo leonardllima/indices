@@ -290,7 +290,7 @@
         </div>
       </div>
       <div class="card-foot">
-        <span class="source-pill">Fonte: IPEA Data</span>
+        <span class="source-pill">Fonte: FGV via Banco Central (SGS)</span>
         <span class="card-status" id="igpm-status">Carregando…</span>
       </div>
     </article>
@@ -329,7 +329,7 @@
 
   <section class="status-bar" id="statusBar">
     <div class="status-item"><span class="dot dot-carregando" id="statusDot"></span><span id="statusTexto">Carregando dados...</span></div>
-    <div class="status-item">Fonte IGP-M: <strong>IPEA Data</strong></div>
+    <div class="status-item">Fonte IGP-M: <strong>FGV · BCB/SGS</strong></div>
     <div class="status-item">Fonte IPCA: <strong>IBGE/SIDRA</strong></div>
   
 </section>
@@ -385,18 +385,19 @@
       <h3>1. APIs utilizadas</h3>
       <ul>
         <li><strong>IBGE/SIDRA</strong> — Sistema IBGE de Recuperação Automática, fonte oficial do IPCA.</li>
-        <li><strong>IPEA Data</strong> — base de séries macroeconômicas do Instituto de Pesquisa Econômica Aplicada, fonte oficial do IGP-M.</li>
+        <li><strong>Banco Central (SGS)</strong> — Sistema Gerenciador de Séries Temporais do Banco Central, que republica em HTTPS a série do IGP-M calculada pela FGV/IBRE. Fonte primária do IGP-M.</li>
+        <li><strong>IPEA Data</strong> — base de séries macroeconômicas do Instituto de Pesquisa Econômica Aplicada; também disponibiliza o IGP-M da FGV. Usada como fonte de contingência (fallback).</li>
       </ul>
 
       <h3>2. Endpoints consumidos</h3>
       <ul>
         <li>IPCA (tabela 1737, variável 63 — variação mensal): <code>https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/63/p/last%2026/d/v63%202</code></li>
-        <li>IGP-M (série IGP12_IGPMG12 — variação mensal): <code>https://www.ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='IGP12_IGPMG12')</code>, com retentativa automática no endpoint oficial em HTTP caso o HTTPS não responda.</li>
+        <li>IGP-M — fonte primária, Banco Central/SGS série 189 (últimos 26 pontos): <code>https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados/ultimos/26?formato=json</code>. Fallback no IPEA Data (série IGP12_IGPMG12): <code>https://www.ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='IGP12_IGPMG12')</code>.</li>
       </ul>
-      <p><strong>Atenção:</strong> a API do IPEA Data é publicada oficialmente apenas em HTTP. Páginas servidas em HTTPS (como esta, quando hospedada via HTTPS) podem ter essa chamada bloqueada pela política de "mixed content" do navegador. Quando isso ocorrer, o painel exibirá a mensagem "API indisponível" para o IGP-M sem interromper a exibição do IPCA. Em produção, recomenda-se um proxy HTTPS próprio para esse endpoint.</p>
+      <p><strong>Atenção:</strong> tanto o Banco Central quanto o IPEA Data são consumidos via HTTPS, o que elimina o antigo bloqueio de "mixed content" que ocorria com o endpoint HTTP do IPEA ao hospedar a página em HTTPS. Caso alguma dessas APIs não envie os cabeçalhos de CORS necessários, a chamada pode ser bloqueada pelo navegador; nesse cenário, o painel exibe "API indisponível" para o IGP-M sem interromper a exibição do IPCA, e a solução recomendada é intermediar as consultas por um proxy HTTPS próprio (por exemplo, um Cloudflare Worker).</p>
 
       <h3>3. Estrutura dos dados retornados</h3>
-      <p>O SIDRA retorna um array em que o primeiro elemento é um cabeçalho descritivo (ignorado pelo sistema) e os demais contêm os campos <code>D3C</code> (competência no formato AAAAMM), <code>D3N</code> (nome do período) e <code>V</code> (valor da variação mensal, em texto). O IPEA Data retorna um objeto OData com a propriedade <code>value</code>, um array de registros contendo <code>VALDATA</code> (data ISO do mês de referência) e <code>VALVALOR</code> (valor numérico da variação mensal).</p>
+      <p>O SIDRA retorna um array em que o primeiro elemento é um cabeçalho descritivo (ignorado pelo sistema) e os demais contêm os campos <code>D3C</code> (competência no formato AAAAMM), <code>D3N</code> (nome do período) e <code>V</code> (valor da variação mensal, em texto). O Banco Central/SGS retorna um array de registros com os campos <code>data</code> (no formato DD/MM/AAAA) e <code>valor</code> (variação mensal, em texto). O IPEA Data (fallback) retorna um objeto OData com a propriedade <code>value</code>, um array de registros contendo <code>VALDATA</code> (data ISO do mês de referência) e <code>VALVALOR</code> (valor numérico da variação mensal).</p>
 
       <h3>4. Processo de cálculo do acumulado de 12 meses</h3>
       <p>Os valores acumulados fornecidos pelas APIs não são utilizados. O sistema calcula o acumulado de 12 meses compondo as 12 variações mensais mais recentes de cada índice através da fórmula <code>((1+m1/100)×(1+m2/100)×...×(1+m12/100) − 1) × 100</code>, implementada na função <code>calcularAcumulado12Meses()</code>. Caso não existam 12 meses consecutivos válidos para uma competência, o acumulado é exibido como indisponível.</p>
@@ -412,7 +413,7 @@
     </details>
   </section>
 
-  <footer>Dados oficiais — IBGE/SIDRA (IPCA) e IPEA Data (IGP-M). Sem valores fixos no código; toda consulta é feita em tempo real.</footer>
+  <footer>Dados oficiais — IBGE/SIDRA (IPCA) e FGV/IBRE via Banco Central/SGS (IGP-M), com IPEA Data como contingência. Sem valores fixos no código; toda consulta é feita em tempo real.</footer>
 </div>
 
 <script>
@@ -427,10 +428,16 @@
 // de 12 meses de todas as 12 linhas exibidas na tabela histórica).
 const SIDRA_URL = "https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/63/p/last%2026/d/v63%202";
 
-// IGP-M: série oficial do IPEA Data (variação mensal, %).
+// IGP-M: índice calculado pela FGV/IBRE. Fonte primária = Banco Central (SGS),
+// série 189, que republica a série da FGV em uma API JSON gratuita e em HTTPS
+// (evita o bloqueio de "mixed content" ao hospedar a página via HTTPS).
+// Busca os últimos 26 pontos — margem suficiente para o acumulado de 12 meses.
+const BCB_IGPM_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados/ultimos/26?formato=json";
+
+// Fallback: série oficial do IGP-M no IPEA Data (também derivada da FGV), via
+// OData em HTTPS. Usada caso a consulta ao Banco Central falhe.
 const IPEA_SERIE = "IGP12_IGPMG12";
 const IPEA_URL_HTTPS = "https://www.ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='" + IPEA_SERIE + "')";
-const IPEA_URL_HTTP  = "http://www.ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='" + IPEA_SERIE + "')";
 
 const TIMEOUT_MS = 15000;     // tempo limite por requisição
 const MESES_HISTORICO = 12;   // linhas exibidas na tabela
@@ -496,23 +503,35 @@ async function buscarIPCA() {
 }
 
 /**
- * Busca a série histórica do IGP-M (variação mensal) na API oficial
- * do IPEA Data, via protocolo OData. Tenta primeiro o endpoint HTTPS
- * e recorre ao HTTP oficial em caso de falha. Retorna um array de
- * objetos { competencia, valor }.
+ * Busca a série histórica do IGP-M (variação mensal) no Banco Central (SGS),
+ * série 189, que republica a série da FGV em JSON via HTTPS. Em caso de falha,
+ * recorre à série equivalente do IPEA Data (OData). Retorna sempre um array de
+ * objetos { competencia, valor } normalizado.
  */
 async function buscarIGPM() {
-  let resposta;
+  // --- Fonte primária: Banco Central / SGS (série 189) ---
   try {
-    resposta = await fetchComTimeout(IPEA_URL_HTTPS);
-  } catch (erroHttps) {
-    console.error("Falha ao consultar o IGP-M via HTTPS, tentando endpoint HTTP oficial do IPEA:", erroHttps);
-    resposta = await fetchComTimeout(IPEA_URL_HTTP);
+    const dados = await fetchComTimeout(BCB_IGPM_URL);
+    if (!Array.isArray(dados) || dados.length === 0) {
+      throw new Error("Retorno vazio da API do Banco Central (SGS).");
+    }
+    // O SGS retorna [{ data: "01/07/2026", valor: "0.41" }, ...] em ordem cronológica.
+    return dados
+      .filter((item) => item && item.data)
+      .map((item) => {
+        const partes = String(item.data).split("/"); // [dd, mm, aaaa]
+        const competencia = partes[2] + partes[1];    // AAAAMM
+        return { competencia, valor: Number(String(item.valor).replace(",", ".")) };
+      });
+  } catch (erroBCB) {
+    console.error("Falha ao consultar o IGP-M no Banco Central (SGS), tentando o IPEA Data:", erroBCB);
   }
 
+  // --- Fallback: IPEA Data (OData, HTTPS) ---
+  const resposta = await fetchComTimeout(IPEA_URL_HTTPS);
   const valores = resposta && resposta.value;
   if (!Array.isArray(valores) || valores.length === 0) {
-    throw new Error("Dados do IGP-M não encontrados na API do IPEA Data.");
+    throw new Error("Dados do IGP-M não encontrados no Banco Central nem no IPEA Data.");
   }
 
   return valores
@@ -799,13 +818,13 @@ function adicionarBanner(mensagem, classe) {
  * Verifica o ambiente de execução. Quando a página é aberta diretamente do
  * disco (protocolo file://), o navegador a trata como origem opaca e bloqueia,
  * por segurança, as consultas de origem cruzada às APIs do IBGE/SIDRA e do
- * IPEA Data. Nesse caso, exibe um aviso explicativo com a solução recomendada.
+ * Banco Central. Nesse caso, exibe um aviso explicativo com a solução recomendada.
  */
 function verificarAmbiente() {
   if (location.protocol === "file:") {
     adicionarBanner(
       "Esta página foi aberta diretamente do disco (<code>file://</code>). Por segurança, " +
-      "o navegador bloqueia as consultas às APIs do IBGE/SIDRA e do IPEA Data nesse modo, " +
+      "o navegador bloqueia as consultas às APIs do IBGE/SIDRA e do Banco Central nesse modo, " +
       "e os índices podem não carregar. Para funcionar corretamente, sirva o arquivo via " +
       "HTTP — por exemplo, hospedando no GitHub Pages, ou rodando " +
       "<code>python -m http.server</code> na pasta do arquivo e acessando " +
@@ -851,8 +870,8 @@ async function atualizarIndices() {
     if (resultadoIGPM.status === "fulfilled") {
       serieIGPM = removerDuplicados(resultadoIGPM.value.filter(validarDados));
     } else {
-      erroIGPM = "Falha ao obter dados do IGP-M. API do IPEA Data indisponível.";
-      exibirErro(erroIGPM, "IPEA Data");
+      erroIGPM = "Falha ao obter dados do IGP-M. APIs do Banco Central e do IPEA Data indisponíveis.";
+      exibirErro(erroIGPM, "BCB/SGS · IPEA");
     }
 
     if (serieIPCA.length === 0 && serieIGPM.length === 0) {
